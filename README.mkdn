@@ -34,6 +34,32 @@ $ drupes ~/src/sdcc280
 # ...and so on
 ```
 
+## Command line usage
+
+```
+Finds duplicate files and optionally deletes them
+
+Usage: drupes [OPTIONS] [ROOTS]...
+
+Arguments:
+  [ROOTS]...  List of directories to search, recursively, for duplicate files; if
+              omitted, the current directory is searched
+
+Options:
+  -e, --empty       Also consider empty files, which will report all empty files
+                    except one as duplicate (which is rarely what you want)
+  -f, --omit-first  Don't print the first filename in a set of duplicates, so that
+                    all the printed filenames are files to consider removing
+  -m, --summarize   Instead of listing duplicates, print a summary of what was
+                    found
+  -p, --paranoid    Engages "paranoid mode" and performs byte-for-byte comparisons
+                    of files, in case you've found the first real-world BLAKE3
+                    hash collision (please publish it if so)
+      --delete      Try to delete all duplicates but one, skipping any files that
+                    cannot be deleted for whatever reason
+  -h, --help        Print help
+```
+
 ## What's a duplicate file?
 
 A file is a duplicate if some other file has exactly the same contents, but
