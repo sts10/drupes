@@ -95,20 +95,40 @@ together several off-the-shelf crates, `drupes` winds up being pretty fast.
 
 In a very conservative test, where I drop the entire system's filesystem cache
 before measuring (to ensure that reads are coming from disk and not memory),
-`drupes` is 1.7 - 7.4x faster than the other tools I use:
+`drupes` is 1.7 - 7.9x faster than the other tools I use:
 
 | Tool | 14G of git repos | 15G of photos |
 | ---- | ------------------ | --------------- |
 | fdupes | 19.322 s | 3.144 s |
 | rmlint | 9.513 s | 1.341 s |
-| **drupes** | 2.594s | 0.788 s |
+| **drupes** | 2.522s | 0.398 |
 
 In practice, I don't drop the system page cache while I'm working, so a "cache
 warm" test is more representative of my day-to-day experience using `drupes`. In
-this case the gap widens to 3-11x (larger files make the gap larger):
+this case the gap widens to 2.5-22x (larger files make the gap larger):
 
 | Tool | 14G of git repos | 15G of photos |
 | ---- | ------------------ | --------------- |
 | fdupes | 3.134 s | 2.131 s |
 | rmlint | 2.206 s | 0.865 s |
-| **drupes** | 0.720 s | 0.198 s |
+| **drupes** | 0.716 s | 0.098 s |
+
+### Okay but why
+
+Rust is not inherently faster than C, _but it does make it easier to use
+advanced performance techniques than C does._
+
+`drupes` is faster than some other tools for, essentially, five reasons.
+
+1. `drupes` will use as many CPU cores as you have available, because doing this
+   is easy in Rust.
+2. `drupes` uses a modern very fast hash algorithm (BLAKE3) because it was just
+   as easy to reach for as something slower. (BLAKE3 is much faster than
+   anything in the SHA family _or_ old MD5.)
+3. `drupes` doesn't bother hashing a file _at all_ if it's the only file of a
+   particular size (which is quite common).
+4. `drupes` first hashes the start of a file; if the result is globally unique,
+   it doesn't bother reading the rest of it.
+5. `drupes` trusts BLAKE3 to be collision-resistant, so it doesn't need to do
+   byte-for-byte comparisons of files it's already hashed. (Though you can
+   request one using `--paranoid` if you're feeling, well, paranoid.)
