@@ -7,7 +7,7 @@ use size::Size;
 use walkdir::WalkDir;
 
 #[derive(Parser)]
-struct Fdupes {
+struct Drupes {
     #[clap(short, long)]
     no_empty: bool,
 
@@ -27,7 +27,7 @@ struct Fdupes {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Fdupes::parse();
+    let args = Drupes::parse();
 
     let mut paths: BTreeMap<u64, Vec<PathBuf>> = BTreeMap::new();
     for root in &args.roots {
