@@ -1,0 +1,88 @@
+# `drupes`: removes dupes
+
+This is a (relatively) simple command line tool for finding, and optionally
+removing, duplicate files.
+
+To install, you will need a Rust toolchain. Check out this repo and run (from
+the repo directory):
+
+```
+cargo install --path .
+```
+
+Simple example (running the program against the Small Device C Compiler source
+code):
+
+```
+# get a summary:
+$ drupes ~/src/sdcc280 -m
+1859 duplicate files (in 995 sets), occupying 30.2 MiB
+checked 16150 files in 4220 size classes
+
+# list the groups of duplicate files:
+$ drupes ~/src/sdcc280
+/home/cbiffle/src/sdcc280/sdcc/device/lib/huge/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/large/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/large-stack-auto/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/mcs51/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/medium/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/small/crtstart.rel
+/home/cbiffle/src/sdcc280/sdcc/device/lib/small-stack-auto/crtstart.rel
+
+/home/cbiffle/src/sdcc280/sdcc/device/lib/pdk13/atoi.sym
+/home/cbiffle/src/sdcc280/sdcc/device/lib/pdk14/atoi.sym
+# ...and so on
+```
+
+## What's a duplicate file?
+
+A file is a duplicate if some other file has exactly the same contents, but
+possibly a different name. For example, if you make a copy of a file with no
+other changes, that will count as a duplicate.
+
+`drupes` only notices duplicates within the directory or directories you
+specify, so a duplicate file somewhere else on your computer (or on that microSD
+card you lost in the couch) won't get reported.
+
+More specifically, `drupes` considers two files to be duplicates if, and only
+if,
+
+1. They have exactly the same length, in bytes.
+2. Their contents hash to the same value using BLAKE3.
+3. If the `--paranoid` flag is given, their contents also match byte-for-byte.
+
+Because BLAKE3 is currently a well-respected cryptographic hash algorithm that's
+considered fairly collision-resistant, two files with the same size and BLAKE3
+hash are _very likely_ to have the same exact contents. The `--paranoid` mode
+should not generally be necessary, and is somewhat slower.
+
+**Unix users:** Currently, `drupes` considers two files to be duplicates even if
+they are hardlinked to the same inode. This is deliberate; I developed the tool
+to winnow down a photo library, not to conserve disk space. If this bugs you,
+I'd be open to adding a switch to control it!
+
+
+## Performance
+
+I haven't put a lot of work into optimizing performance, but by slapping
+together several off-the-shelf crates, `drupes` winds up being pretty fast.
+
+In a very conservative test, where I drop the entire system's filesystem cache
+before measuring (to ensure that reads are coming from disk and not memory),
+`drupes` is 1.5-4x faster than the other tools I use:
+
+| Tool | 14G of git repos | 15G of photos |
+| ---- | ------------------ | --------------- |
+| fdupes | 19.322 s | 3.144 s |
+| rmlint | 9.513 s | 1.341 s |
+| **drupes** | 4.977s | 0.858 s |
+
+In practice, I don't drop the system page cache while I'm working, so a "cache
+warm" test is more representative of my day-to-day experience using `drupes`. In
+this case the gap widens to 3-10x (larger files make the gap larger):
+
+| Tool | 14G of git repos | 15G of photos |
+| ---- | ------------------ | --------------- |
+| fdupes | 3.134 s | 2.131 s |
+| rmlint | 2.206 s | 0.865 s |
+| **drupes** | 0.875 s | 0.207 s |
