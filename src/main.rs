@@ -2,6 +2,7 @@ use std::{collections::{BTreeMap, HashMap}, fs::File, path::PathBuf};
 
 use clap::Parser;
 use rayon::prelude::*;
+use size::Size;
 use walkdir::WalkDir;
 
 #[derive(Parser)]
@@ -11,6 +12,9 @@ struct Fdupes {
 
     #[clap(short('f'), long)]
     omit_first: bool,
+
+    #[clap(short('m'), long)]
+    summarize: bool,
 
     roots: Vec<PathBuf>,
 }
@@ -30,8 +34,8 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    println!("unique size classes: {}", paths.len());
-    println!("found {} files", paths.values().map(|v| v.len()).sum::<usize>());
+    let unique_size_classes = paths.len();
+    let total_files_checked = paths.values().map(|v| v.len()).sum::<usize>();
 
     let hashed_files = paths.into_par_iter().flat_map(|(_size, paths)| {
         if paths.len() > 1 {
@@ -61,18 +65,37 @@ fn main() -> anyhow::Result<()> {
         a
     });
 
-    for (_hash, mut files) in hashed_files {
-        if files.len() > 1 {
-            files.sort();
-            let mut files = files.into_iter();
-            if args.omit_first {
-                files.next();
-            }
-            for f in files {
-                println!("{}", f.display());
-            }
-            if !args.omit_first {
-                println!();
+    if args.summarize {
+        let set_count = hashed_files.values()
+            .filter(|files| files.len() > 1)
+            .count();
+        let dupe_count = hashed_files.values()
+            .filter_map(|files| files.len().checked_sub(1))
+            .sum::<usize>();
+        let dupe_size = hashed_files.values()
+            .filter(|files| files.len() > 1)
+            .try_fold(0, |sum, files| {
+                std::fs::metadata(&files[0])
+                    .map(|meta| sum + meta.len() * (files.len() as u64 - 1))
+            })?;
+        let dupe_size = Size::from_bytes(dupe_size);
+        println!("{dupe_count} duplicate files (in {set_count} sets), \
+            occupying {dupe_size}");
+        println!("checked {total_files_checked} files in {unique_size_classes} size classes");
+    } else {
+        for (_hash, mut files) in hashed_files {
+            if files.len() > 1 {
+                files.sort();
+                let mut files = files.into_iter();
+                if args.omit_first {
+                    files.next();
+                }
+                for f in files {
+                    println!("{}", f.display());
+                }
+                if !args.omit_first {
+                    println!();
+                }
             }
         }
     }
