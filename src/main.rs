@@ -1,5 +1,6 @@
-use std::{collections::{BTreeMap, HashMap}, fs::File, path::PathBuf};
+use std::{collections::{BTreeMap, HashMap}, fs::File, io::{BufReader, Read, Seek}, path::PathBuf};
 
+use anyhow::bail;
 use clap::Parser;
 use rayon::prelude::*;
 use size::Size;
@@ -15,6 +16,12 @@ struct Fdupes {
 
     #[clap(short('m'), long)]
     summarize: bool,
+
+    #[clap(short, long)]
+    paranoid: bool,
+
+    #[clap(long)]
+    delete: bool,
 
     roots: Vec<PathBuf>,
 }
@@ -37,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     let unique_size_classes = paths.len();
     let total_files_checked = paths.values().map(|v| v.len()).sum::<usize>();
 
-    let hashed_files = paths.into_par_iter().flat_map(|(_size, paths)| {
+    let mut hashed_files = paths.into_par_iter().flat_map(|(_size, paths)| {
         if paths.len() > 1 {
             paths
         } else {
@@ -65,6 +72,41 @@ fn main() -> anyhow::Result<()> {
         a
     });
 
+    if args.paranoid {
+        eprintln!("paranoid mode: verifying file contents");
+        hashed_files.par_iter().try_for_each(|(_, files)| {
+            if files.len() > 1 {
+                let first = &files[0];
+                let first_f = File::open(first)?;
+                let first_meta = first_f.metadata()?;
+                let mut first_f = BufReader::new(first_f);
+
+                for other in &files[1..] {
+                    first_f.rewind()?;
+                    let other_f = File::open(other)?;
+                    let other_meta = other_f.metadata()?;
+                    let mut other_f = BufReader::new(other_f);
+
+                    if first_meta.len() != other_meta.len() {
+                        bail!("files no longer have same length:\n{}\n{}", first.display(), other.display());
+                    }
+
+                    let mut buf1 = [0u8];
+                    let mut buf2 = [0u8];
+                    for _ in 0..first_meta.len() {
+                        first_f.read_exact(&mut buf1)?;
+                        other_f.read_exact(&mut buf2)?;
+                        if buf1 != buf2 {
+                            bail!("files differ (blake3 collision found?):\n{}\n{}", first.display(), other.display());
+                        }
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        eprintln!("files really are duplicates");
+    }
+
     if args.summarize {
         let set_count = hashed_files.values()
             .filter(|files| files.len() > 1)
@@ -83,10 +125,10 @@ fn main() -> anyhow::Result<()> {
             occupying {dupe_size}");
         println!("checked {total_files_checked} files in {unique_size_classes} size classes");
     } else {
-        for (_hash, mut files) in hashed_files {
+        for files in hashed_files.values_mut() {
             if files.len() > 1 {
                 files.sort();
-                let mut files = files.into_iter();
+                let mut files = files.iter();
                 if args.omit_first {
                     files.next();
                 }
@@ -98,6 +140,20 @@ fn main() -> anyhow::Result<()> {
                 }
             }
         }
+    }
+
+    if args.delete {
+        for files in hashed_files.values() {
+            if files.len() > 1 {
+                for f in &files[1..] {
+                    println!("deleting: {}", f.display());
+                    if let Err(e) = std::fs::remove_file(f) {
+                        eprintln!("error deleting {}: {e}", f.display());
+                    }
+                }
+            }
+        }
+
     }
 
     Ok(())
