@@ -95,20 +95,20 @@ together several off-the-shelf crates, `drupes` winds up being pretty fast.
 
 In a very conservative test, where I drop the entire system's filesystem cache
 before measuring (to ensure that reads are coming from disk and not memory),
-`drupes` is 1.5-4x faster than the other tools I use:
+`drupes` is 1.7 - 7.4x faster than the other tools I use:
 
 | Tool | 14G of git repos | 15G of photos |
 | ---- | ------------------ | --------------- |
 | fdupes | 19.322 s | 3.144 s |
 | rmlint | 9.513 s | 1.341 s |
-| **drupes** | 4.977s | 0.858 s |
+| **drupes** | 2.594s | 0.788 s |
 
 In practice, I don't drop the system page cache while I'm working, so a "cache
 warm" test is more representative of my day-to-day experience using `drupes`. In
-this case the gap widens to 3-10x (larger files make the gap larger):
+this case the gap widens to 3-11x (larger files make the gap larger):
 
 | Tool | 14G of git repos | 15G of photos |
 | ---- | ------------------ | --------------- |
 | fdupes | 3.134 s | 2.131 s |
 | rmlint | 2.206 s | 0.865 s |
-| **drupes** | 0.875 s | 0.207 s |
+| **drupes** | 0.720 s | 0.198 s |

@@ -8,7 +8,7 @@ use anyhow::bail;
 use clap::Parser;
 use rayon::prelude::*;
 use size::Size;
-use walkdir::WalkDir;
+use jwalk::WalkDir;
 
 /// Finds duplicate files and optionally deletes them.
 #[derive(Parser)]
