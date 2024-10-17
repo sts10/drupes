@@ -13,7 +13,8 @@ use walkdir::WalkDir;
 /// Finds duplicate files and optionally deletes them.
 #[derive(Parser)]
 struct Drupes {
-    /// Also consider empty files, which will remove all empty files but one.
+    /// Also consider empty files, which will report all empty files except one
+    /// as duplicate (which is rarely what you want).
     #[clap(short, long)]
     empty: bool,
 
