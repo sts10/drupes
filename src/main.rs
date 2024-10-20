@@ -13,10 +13,17 @@ use jwalk::WalkDir;
 const PREHASH_SIZE: usize = 4 * 1024;
 
 /// Finds duplicate files and optionally deletes them.
+///
+/// This program recursively analyzes one or more paths and tries to find files
+/// that appear in multiple places, possibly with different names, but have the
+/// exact same content. This can happen, for example, if you restore a
+/// collection of backups from different dates, which is the case that motivated
+/// the author.
 #[derive(Parser)]
 struct Drupes {
     /// Also consider empty files, which will report all empty files except one
-    /// as duplicate (which is rarely what you want).
+    /// as duplicate; by default, empty files are ignored, because this is
+    /// rarely what you actually want.
     #[clap(short, long)]
     empty: bool,
 
@@ -40,12 +47,18 @@ struct Drupes {
     #[clap(long)]
     delete: bool,
 
+    /// Enable additional output about what the program is doing.
+    #[clap(short, long)]
+    verbose: bool,
+
     /// List of directories to search, recursively, for duplicate files; if
     /// omitted, the current directory is searched.
     roots: Vec<PathBuf>,
 }
 
 fn main() -> anyhow::Result<()> {
+    let start = Instant::now();
+
     let mut args = Drupes::parse();
 
     if args.roots.is_empty() {
@@ -69,6 +82,11 @@ fn main() -> anyhow::Result<()> {
     // _relatively_ unique.
     let mut paths: BTreeMap<u64, Vec<PathBuf>> = BTreeMap::new();
     for root in &args.roots {
+        if args.verbose {
+            eprintln!("{:?} starting walk of {}",
+                start.elapsed(), root.display());
+        }
+
         for entry in WalkDir::new(root) {
             let entry = entry?;
             let meta = entry.metadata()?;
@@ -80,11 +98,20 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    if args.verbose {
+        eprintln!("{:?} pass one complete, found {} size-groups",
+            start.elapsed(), paths.len());
+    }
+
     // Drop all file size groups that contain no duplicates (have only one
     // member).
     //
     // This saves about 10% of runtime.
     paths.retain(|_size, paths| paths.len() > 1);
+
+    if args.verbose {
+        eprintln!("...of which {} had more than one member", paths.len());
+    }
 
     // PASS TWO
     //
@@ -163,6 +190,20 @@ fn main() -> anyhow::Result<()> {
 
     let unique_prehash_groups = hashed_files.len();
 
+    if args.verbose {
+        eprintln!("{:?} pass two complete, found {unique_prehash_groups} \
+            unique first blocks",
+            start.elapsed());
+        let dupesets = hashed_files.values()
+            .filter(|paths| paths.len() > 1)
+            .count();
+        eprintln!("...of which {dupesets} are present in more than one file");
+        let dupes = hashed_files.values()
+            .map(|paths| paths.len().saturating_sub(1))
+            .sum::<usize>();
+        eprintln!("...for a total of {dupes} possibly redundant files");
+    }
+
     // PASS THREE
     //
     // For any files whose first `PREHASH_SIZE` bytes match at least one other
@@ -226,6 +267,11 @@ fn main() -> anyhow::Result<()> {
             }
             a
         });
+
+    if args.verbose {
+        eprintln!("{:?} pass three complete, generating results",
+            start.elapsed());
+    }
 
     if args.paranoid {
         // Given our map of collated hash-groups from the previous step, let's
