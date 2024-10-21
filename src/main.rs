@@ -4,7 +4,7 @@
 
 use std::{collections::{BTreeMap, HashMap}, fs::File, io::{BufReader, ErrorKind, Read, Seek}, path::{Path, PathBuf}, time::Instant};
 
-use anyhow::bail;
+use anyhow::{bail, Context as _};
 use clap::Parser;
 use rayon::prelude::*;
 use size::Size;
@@ -137,7 +137,8 @@ fn main() -> anyhow::Result<()> {
         // We use `map_with` here to allocate exactly one I/O buffer per backing
         // Rayon thread, instead of one per closure, because I'm neurotic.
         .map_with(vec![0u8; PREHASH_SIZE], |buf, path| {
-            let mut f = File::open(path)?;
+            let mut f = File::open(path)
+                .with_context(|| format!("unable to open: {}", path.display()))?;
 
             // Read up to `PREHASH_SIZE` bytes, or fewer if the file is shorter
             // than that. (It's odd that there's no operation for this in the
@@ -148,7 +149,9 @@ fn main() -> anyhow::Result<()> {
                     Ok(0) => break,
                     Ok(n) => total += n,
                     Err(e) if e.kind() == ErrorKind::Interrupted => continue,
-                    Err(e) => return Err(e),
+                    Err(e) => return Err(e).context(
+                        format!("unable to read path: {}", path.display())
+                    ),
                 }
             }
             // Hash the first chunk of the file.
@@ -160,7 +163,7 @@ fn main() -> anyhow::Result<()> {
             match result {
                 Ok(data) => Some(data),
                 Err(e) => {
-                    eprintln!("{e}");
+                    eprintln!("{e:?}");
                     None
                 }
             }
@@ -232,7 +235,8 @@ fn main() -> anyhow::Result<()> {
         // For files smaller than `PREHASH_SIZE`, we immediately finalize the
         // keyed hash without reading anything.
         .map(|(prehash, path)| {
-            let mut f = File::open(path)?;
+            let mut f = File::open(path)
+                .with_context(|| format!("unable to open: {}", path.display()))?;
             let mut hasher = blake3::Hasher::new_keyed(prehash.as_bytes());
 
             // Small files have already been completely hashed. Skip them.
