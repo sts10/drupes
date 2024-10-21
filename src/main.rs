@@ -88,8 +88,11 @@ fn main() -> anyhow::Result<()> {
         }
 
         for entry in WalkDir::new(root) {
-            let entry = entry?;
-            let meta = entry.metadata()?;
+            let entry = entry
+                .with_context(|| format!("problem reading dirent in {}", root.display()))?;
+            let meta = entry.metadata()
+                .with_context(|| format!("problem getting metadata for {}",
+                        entry.path().display()))?;
             if meta.is_file() && (meta.len() > 0 || args.empty) {
                 paths.entry(meta.len())
                     .or_default()
