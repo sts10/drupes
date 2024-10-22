@@ -71,7 +71,7 @@ pub fn pass_one(
 // clear this way once I got used to it and (2) it's by far the
 // easiest-to-reach "go faster button."
 pub fn pass_two(paths: &BTreeMap<u64, Vec<PathBuf>>) -> HashMap<blake3::Hash, Vec<&Path>> {
-    let hashed_files: HashMap<blake3::Hash, Vec<&Path>> = paths
+    paths
         .par_iter()
         // Flatten the map into a list of paths to hash, discarding the size
         // information.
@@ -135,8 +135,7 @@ pub fn pass_two(paths: &BTreeMap<u64, Vec<PathBuf>>) -> HashMap<blake3::Hash, Ve
                 a.entry(k).or_default().extend(v);
             }
             a
-        });
-    hashed_files
+        })
 }
 
 /// PASS THREE
